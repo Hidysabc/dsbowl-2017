@@ -16,7 +16,7 @@ import scipy.ndimage
 import argparse
 import logging
 import sys
-
+import boto3
 
 FORMAT = '%(asctime)-15s %(name)-8s %(levelname)s %(message)s'
 LOG_MAP = {
@@ -33,7 +33,7 @@ logger.setLevel(LOG_MAP["debug"])
 
 # Load the scans in given folder path
 def load_scan(path):
-    slices = [dicom.read_file(path + '/' + s) for s in os.listdir(path)]
+    slices = [dicom.read_file(path + '/' + s) for s in os.listdir(path) if '.dcm'in s]
     slices.sort(key = lambda x: int(x.ImagePositionPatient[2]))
     try:
         slice_thickness = np.abs(slices[0].ImagePositionPatient[2] - slices[1].ImagePositionPatient[2])
@@ -86,6 +86,17 @@ def resample(image, scan, new_spacing=[1,1,1]):
 
 MIN_BOUND = -1000.0
 MAX_BOUND = 400.0
+
+def resample_new(image, scan, target_size=[128,256,256]):
+    # Determine current pixel spacing
+    spacing = np.array([scan[0].SliceThickness] + scan[0].PixelSpacing, dtype=np.float32)
+    real_resize_factor = np.array(target_size) / image.shape
+    new_spacing = spacing / real_resize_factor
+    
+    image = scipy.ndimage.interpolation.zoom(image, real_resize_factor, mode='nearest')
+    
+    return image, new_spacing
+
     
 def normalize(image):
     image = (image - MIN_BOUND) / (MAX_BOUND - MIN_BOUND)
@@ -99,6 +110,53 @@ def zero_center(image):
     image = image - PIXEL_MEAN
     return image
 
+
+def cropping(image, x_size, y_size):
+    x_mean = image.shape[1]//2
+    y_mean = image.shape[2]//2
+    crop = image[:,x_mean-x_size/2:x_mean+x_size/2,y_mean-y_size/2:y_mean+y_size/2]
+    return crop
+
+
+def shift(zoom_img, target_size, max_index):
+    image_x_size = zoom_img.shape[1]
+    image_y_size = zoom_img.shape[2]
+    image_z_size = zoom_img.shape[0]
+    if max_index == 0:
+        shift_0 = 0
+        shift_1 = int((target_size-image_x_size)/2)
+        shift_2 = int((target_size-image_y_size)/2)
+    elif max_index ==1:
+        shift_0 = int((target_size-image_z_size)/2)
+        shift_1 = 0
+        shift_2 = int((target_size-image_y_size)/2)
+    else:
+        shift_0 = int((target_size-image_z_size)/2)
+        shift_1 = int((target_size-image_x_size)/2)
+        shift_2 = 0
+    shift = (shift_0, shift_1, shift_2)
+    
+    return shift
+
+
+def harmonize(img, target_size):
+    max_size = np.max(img.shape)
+    max_index = np.argmax(img.shape)
+    scale_ratio = target_size/max_size
+    zoom_image= scipy.ndimage.interpolation.zoom(img, scale_ratio, mode='nearest')
+    image_x_size = zoom_image.shape[1]
+    image_y_size = zoom_image.shape[2]
+    image_z_size = zoom_image.shape[0]
+    zoom_image_mode = stats.mode(zoom_image[int(zoom_image.shape[0]/2*scale_ratio)].flatten())[0]
+    new_img = np.ndarray([target_size,target_size,target_size], dtype=np.float32)
+    new_img = new_img+zoom_image_mode
+    #print(new_img.shape)
+    #print(zoom_image.shape)
+    shift_all =shift(zoom_image, target_size, max_index)
+    new_img[shift_all[0]:shift_all[0]+image_z_size:,shift_all[1]:shift_all[1]+image_x_size,shift_all[2]:shift_all[2]+image_y_size]=zoom_image
+    return new_img
+
+
 def main():
     parser = argparse.ArgumentParser(
             description=__doc__,
@@ -108,7 +166,14 @@ def main():
         "input",
         metavar="INPUT",
         type=str,
-        help = "Folder storing patient's scanned images"
+        help = "Input patient_id, the folder which stores a collection of one patient's CT scanned images"
+    )
+    parser.add_argument(
+        "--s3bucket",
+        metavar = "S3BUCKET",
+        type = str,
+        help = "AWS S3 bucket name where the data resides",
+        default = "dsbowl2017-sample-images"
     )
     parser.add_argument(
         "--logging",
@@ -119,24 +184,38 @@ def main():
     )
     args = parser.parse_args()
 
-    input_dir = args.input
+    patient_id = args.input
     filetype = '.npy'
-    patient_id = os.path.basename(input_dir)
-    newPath = "%s.npy" %(patient_id)
+    input_dir = '/tmp/'
+    newPath = "%s%s%s" %(input_dir, patient_id, filetype)
+    
+    #AWS S3 setup connection. 
+    #Download from S3 the entire patient's scanned images
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(args.s3bucket)
+    all_keys = [obj.key for obj in bucket.objects.all()]
+    patient_imgs_keys = [i for i in all_keys if patient_id in i]
+    s3_client = boto3.client('s3')
+    [s3_client.download_file(args.s3bucket, key, os.path.join('/tmp',os.path.basename(key))) for key in patient_imgs_keys]
+    logger.debug("Successfully downloaded images from S3 patient_id:{}!".format(patient_id))
+
     if not os.path.exists(newPath):
         patient_scan = load_scan(input_dir)
         patient_pixels = get_pixels_hu(patient_scan)
 
-        patient_pixels_resampled, patient_spacing = resample(patient_pixels, patient_scan, [1,1,1])
+        #patient_pixels_resampled, patient_spacing = resample(patient_pixels, patient_scan, [1,1,1])
+        patient_pixels_resampled, patient_spacing = resample_new(patient_pixels, patient_scan, [128,256,256])
         patient_pixels_normalized = normalize(patient_pixels_resampled)
         patient_pixels_zero_centered = zero_center(patient_pixels_normalized)
         logger.debug("Shape before resampling\t{}".format(patient_pixels.shape))
         logger.debug("Shape after resampling\t{}".format(patient_pixels_resampled.shape))
         
         np.save(newPath,patient_pixels_zero_centered)
-        logger.debug("new img: {} adds to processed collection!".format(newPath))
+        logger.debug("New image: {} adds to pre-processed collection!".format(newPath))
+        s3_client.upload_file(newPath,args.s3bucket,os.path.basename(newPath))
+        logger.debug("Sucessfully uploaded image: {} to S3".format(os.path.basename(newPath)))
     else:
-        logger.debug("processed imgs: {}  already exists!".format(newPath))
+        logger.debug("Pre-processed image: {}  already exists!".format(newPath))
 
 if __name__ == "__main__":
     sys.exit(main())

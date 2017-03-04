@@ -1,6 +1,5 @@
 .ipynb_checkpoints/
 data/
-notebooks/
 models
 *.pyc
 *.egg-info
