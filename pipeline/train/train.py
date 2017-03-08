@@ -44,6 +44,6 @@ model.compile(loss='binary_crossentropy',
               optimizer=Adam(),
               metrics=['accuracy'])
 
-history = model.fit(X, y, nb_epoch=3, batch_size=5)
+history = model.fit(X, y, nb_epoch=3, batch_size=2)
 
 
