@@ -1,0 +1,13 @@
+#####
+#
+# Docker file to build image that can run Data Science Bowl 2017 tutorial:
+# U-Net Segmentation Approach to Cancer Diagnosis
+#
+
+FROM continuumio/anaconda
+
+MAINTAINER Wei-Yi Cheng
+
+RUN pip install boto3 pydicom && \
+    rm -rf /root/.cache/pip/*
+
