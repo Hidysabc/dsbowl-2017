@@ -8,6 +8,6 @@ FROM tensorflow/tensorflow:latest-gpu
 
 MAINTAINER Wei-Yi Cheng
 
-RUN pip install keras pandas && \
+RUN pip install keras pandas boto3 && \
     rm -rf /root/.cache/pip/*
 
