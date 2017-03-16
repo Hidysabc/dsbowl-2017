@@ -72,7 +72,7 @@ def generate_data_from_directory(image_path,csv_path,batch_size):
         for i in np.arange(int(len(images)/batch_size+0.5)):
             imgs = images[i*batch_size:(i+1)*batch_size]
             imgs_id = images_id[i*batch_size:(i+1)*batch_size]
-            img_array = np.array([np.load(os.path.join(path, j)) for j in imgs])
+            img_array = np.array([np.load(os.path.join(image_path, j)) for j in imgs])
             #print((len(img_array)))
             label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id])
             #[print(l) for l in label]
