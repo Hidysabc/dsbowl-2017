@@ -18,7 +18,8 @@ input_sample_images = "sample_images"
 input_preprocessing_images = "preprocessing_images"
 input_csv = "csv"
 input_dir = '/tmp/'
-batch_size = 5 
+batch_size = 5
+NB_CLASSES = 2
 
 s3 = boto3.resource('s3')
 bucket = s3.Bucket(s3bucket)
@@ -59,22 +60,20 @@ csv_path = os.path.join(input_dir,csv_info[0])
 #images = [f for f in images if f.replace(".npy","") in labels_info.index]
 
 
-def generate_data_from_directory(image_path,csv_path,batch_size):
+def generate_data_from_directory(image_path, csv_path, batch_size, nb_classes=NB_CLASSES):
     images = [f for f in os.listdir(image_path) if f.endswith('.npy')]
     labels_info = pd.read_csv(os.path.join(input_dir, csv_path))
     CANCER_MAP = labels_info.set_index('id')['cancer'].to_dict()
     labels_info.set_index("id", drop=True, inplace=True)
     images = [f for f in images if f.replace(".npy","") in labels_info.index]
     images_id = [f.replace(".npy","") for f in images]
-
-   
     while 1:
         for i in np.arange(int(len(images)/batch_size+0.5)):
             imgs = images[i*batch_size:(i+1)*batch_size]
             imgs_id = images_id[i*batch_size:(i+1)*batch_size]
             img_array = np.array([np.load(os.path.join(image_path, j)) for j in imgs])
             #print((len(img_array)))
-            label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id])
+            label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id], nb_classes)
             #[print(l) for l in label]
             yield (np.reshape(img_array, (img_array.shape[0],img_array.shape[1],img_array.shape[2], img_array.shape[3],1)),label)
 
