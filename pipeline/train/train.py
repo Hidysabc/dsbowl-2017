@@ -2,6 +2,7 @@ from __future__ import print_function
 from __future__ import division
 import numpy as np
 import os
+import logging
 import pandas as pd
 from scipy import stats
 from keras.utils import np_utils
@@ -13,6 +14,8 @@ from keras.layers.pooling import MaxPooling3D
 from keras.optimizers import RMSprop, Adam
 import boto3
 
+model_name = "hw-4c"
+
 s3bucket = "dsbowl2017-sample-images"
 input_sample_images = "sample_images"
 input_preprocessing_images = "preprocessing_images"
@@ -20,6 +23,20 @@ input_csv = "csv"
 input_dir = '/tmp/'
 batch_size = 5
 NB_CLASSES = 2
+
+FORMAT = '%(asctime)-15s %(name)-8s %(levelname)s %(message)s'
+LOG_MAP = {
+        "info": logging.INFO,
+        "debug": logging.DEBUG,
+        "warn": logging.WARNING
+        }
+
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(model_name)
+
+logger.setLevel(LOG_MAP["debug"])
+
+
 
 s3 = boto3.resource('s3')
 bucket = s3.Bucket(s3bucket)
@@ -84,7 +101,7 @@ X = np.array([x[1] for x in tmp])
 X = X.reshape((X.shape[0], X.shape[1], X.shape[2], X.shape[3], 1))
 y = np_utils.to_categorical([CANCER_MAP[c[0]] for c in tmp])
 '''
-
+logger.info("Start building model...")
 model = Sequential()
 model.add(Convolution3D(32, 3, 3, 3, border_mode='same',activation='relu', input_shape=(32,64,64, 1)))
 model.add(MaxPooling3D(pool_size=(2, 2, 2)))
@@ -108,11 +125,15 @@ model.compile(loss='binary_crossentropy',
               optimizer=Adam(),
               metrics=['accuracy'])
 
+
 gen = generate_data_from_directory(image_path, csv_path, batch_size)
 history = model.fit_generator(gen, 
                               samples_per_epoch = 19, 
                               nb_epoch=3, 
                               verbose = 1)
+
+model.save("{}.h5".format(model_name))
+logger.info("Finish! :)")
 #history = model.fit(X, y, nb_epoch=3, batch_size=2)
 
 
