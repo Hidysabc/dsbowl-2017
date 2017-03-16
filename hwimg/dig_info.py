@@ -87,6 +87,7 @@ def main():
     df_all = pd.merge(df_scan, df_label, on = 'id')
     df_all = pd.merge(df_scan_dicom, df_all, on = 'id')
     name = '%s_info_all.csv' %(os.path.basename(args.patients_folder))
+    name = name.replace('images','img')
     filepath = os.path.join(os.path.dirname(args.patients_folder),name)
     df_all.to_csv(filepath)
 

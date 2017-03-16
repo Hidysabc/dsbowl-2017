@@ -204,7 +204,7 @@ def main():
         patient_pixels = get_pixels_hu(patient_scan)
 
         #patient_pixels_resampled, patient_spacing = resample(patient_pixels, patient_scan, [1,1,1])
-        patient_pixels_resampled, patient_spacing = resample_new(patient_pixels, patient_scan, [128,256,256])
+        patient_pixels_resampled, patient_spacing = resample_new(patient_pixels, patient_scan, [32,64,64])
         patient_pixels_normalized = normalize(patient_pixels_resampled)
         patient_pixels_zero_centered = zero_center(patient_pixels_normalized)
         logger.debug("Shape before resampling\t{}".format(patient_pixels.shape))

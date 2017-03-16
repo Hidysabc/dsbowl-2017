@@ -6,7 +6,7 @@
 
 FROM continuumio/anaconda
 
-MAINTAINER Wei-Yi Cheng
+MAINTAINER Hidy Chiu
 
 RUN pip install boto3 pydicom && \
     rm -rf /root/.cache/pip/*
