@@ -73,9 +73,9 @@ def generate_data_from_directory(image_path,csv_path,batch_size):
             imgs = images[i*batch_size:(i+1)*batch_size]
             imgs_id = images_id[i*batch_size:(i+1)*batch_size]
             img_array = np.array([np.load(os.path.join(path, j)) for j in imgs])
-            print((len(img_array)))
+            #print((len(img_array)))
             label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id])
-            [print(l) for l in label]
+            #[print(l) for l in label]
             yield (np.reshape(img_array, (img_array.shape[0],img_array.shape[1],img_array.shape[2], img_array.shape[3],1)),label)
 
 '''
@@ -87,7 +87,7 @@ y = np_utils.to_categorical([CANCER_MAP[c[0]] for c in tmp])
 '''
 
 model = Sequential()
-model.add(Convolution3D(32, 3, 3, 3, border_mode='same',activation='relu', input_shape=(128,256,256, 1)))
+model.add(Convolution3D(32, 3, 3, 3, border_mode='same',activation='relu', input_shape=(32,64,64, 1)))
 model.add(MaxPooling3D(pool_size=(2, 2, 2)))
 model.add(Convolution3D(32, 3, 3, 3, border_mode='same',activation='relu'))
 model.add(MaxPooling3D(pool_size=(2, 2, 2)))
