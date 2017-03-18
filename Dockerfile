@@ -4,11 +4,11 @@
 # U-Net Segmentation Approach to Cancer Diagnosis
 #
 
-FROM kaggle/python
+FROM dmlc/mxnet:cuda
 
 MAINTAINER Wei-Yi Cheng
 
-RUN pip install SimpleITK && \
+RUN pip install SimpleITK jupyter && \
     # install tensorflow GPU
     #pip install tensorflow-gpu &&\
     # install tensorflow CPU

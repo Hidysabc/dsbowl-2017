@@ -41,31 +41,31 @@ def load_scan(path):
         slice_thickness = np.abs(slices[0].SliceLocation - slices[1].SliceLocation)
     for s in slices:
         s.SliceThickness = slice_thickness
-                                                                         
+
     return slices
 
 def get_pixels_hu(slices):
     image = np.stack([s.pixel_array for s in slices])
-    # Convert to int16 (from sometimes int16), 
+    # Convert to int16 (from sometimes int16),
     # should be possible as values should always be low enough (<32k)
     image = image.astype(np.int16)
 
     # Set outside-of-scan pixels to 0
     # The intercept is usually -1024, so air is approximately 0
     image[image == -2000] = 0
-    
+
     # Convert to Hounsfield units (HU)
     for slice_number in range(len(slices)):
-        
+
         intercept = slices[slice_number].RescaleIntercept
         slope = slices[slice_number].RescaleSlope
-        
+
         if slope != 1:
             image[slice_number] = slope * image[slice_number].astype(np.float64)
             image[slice_number] = image[slice_number].astype(np.int16)
-            
+
         image[slice_number] += np.int16(intercept)
-    
+
     return np.array(image, dtype=np.int16)
 
 
@@ -78,9 +78,9 @@ def resample(image, scan, new_spacing=[1,1,1]):
     new_shape = np.round(new_real_shape)
     real_resize_factor = new_shape / image.shape
     new_spacing = spacing / real_resize_factor
-    
+
     image = scipy.ndimage.interpolation.zoom(image, real_resize_factor, mode='nearest')
-    
+
     return image, new_spacing
 
 
@@ -92,12 +92,12 @@ def resample_new(image, scan, target_size=[128,256,256]):
     spacing = np.array([scan[0].SliceThickness] + scan[0].PixelSpacing, dtype=np.float32)
     real_resize_factor = np.array(target_size) / image.shape
     new_spacing = spacing / real_resize_factor
-    
+
     image = scipy.ndimage.interpolation.zoom(image, real_resize_factor, mode='nearest')
-    
+
     return image, new_spacing
 
-    
+
 def normalize(image):
     image = (image - MIN_BOUND) / (MAX_BOUND - MIN_BOUND)
     image[image>1] = 1.
@@ -135,7 +135,7 @@ def shift(zoom_img, target_size, max_index):
         shift_1 = int((target_size-image_x_size)/2)
         shift_2 = 0
     shift = (shift_0, shift_1, shift_2)
-    
+
     return shift
 
 
@@ -188,8 +188,8 @@ def main():
     filetype = '.npy'
     input_dir = '/tmp/'
     newPath = "%s%s%s" %(input_dir, patient_id, filetype)
-    
-    #AWS S3 setup connection. 
+
+    #AWS S3 setup connection.
     #Download from S3 the entire patient's scanned images
     s3 = boto3.resource('s3')
     bucket = s3.Bucket(args.s3bucket)
@@ -209,7 +209,7 @@ def main():
         patient_pixels_zero_centered = zero_center(patient_pixels_normalized)
         logger.debug("Shape before resampling\t{}".format(patient_pixels.shape))
         logger.debug("Shape after resampling\t{}".format(patient_pixels_resampled.shape))
-        
+
         np.save(newPath,patient_pixels_zero_centered)
         logger.debug("New image: {} adds to pre-processed collection!".format(newPath))
         s3_client.upload_file(newPath,args.s3bucket,os.path.basename(newPath))
