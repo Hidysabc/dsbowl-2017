@@ -11,3 +11,6 @@ MAINTAINER Hidy Chiu
 RUN pip install boto3 pydicom && \
     rm -rf /root/.cache/pip/*
 
+RUN cd /root && git clone https://github.com/Hidysabc/dsbowl-2017.git && \
+
+WORKDIR /root/dsbowl-2017/pipeline/preprocess

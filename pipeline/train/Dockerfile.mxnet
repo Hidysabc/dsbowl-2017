@@ -1,0 +1,12 @@
+#####
+#
+# Docker file to build image to train dsbowl2017 model using mxnet
+#
+
+FROM weiyi/mxnet-cuda-cudnn:v0.9.3-0.8-5
+
+MAINTAINER Wei-Yi Cheng
+
+RUN cd /root && git clone https://github.com/Hidysabc/dsbowl-2017.git && \
+
+WORKDIR /root/dsbowl-2017/pipeline/train
