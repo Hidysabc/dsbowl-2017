@@ -43,31 +43,31 @@ def load_scan(path):
         slice_thickness = np.abs(slices[0].SliceLocation - slices[1].SliceLocation)
     for s in slices:
         s.SliceThickness = slice_thickness
-                                                                         
+
     return slices
 
 def get_pixels_hu(slices):
     image = np.stack([s.pixel_array for s in slices])
-    # Convert to int16 (from sometimes int16), 
+    # Convert to int16 (from sometimes int16),
     # should be possible as values should always be low enough (<32k)
     image = image.astype(np.int16)
 
     # Set outside-of-scan pixels to 0
     # The intercept is usually -1024, so air is approximately 0
     image[image == -2000] = 0
-    
+
     # Convert to Hounsfield units (HU)
     for slice_number in range(len(slices)):
-        
+
         intercept = slices[slice_number].RescaleIntercept
         slope = slices[slice_number].RescaleSlope
-        
+
         if slope != 1:
             image[slice_number] = slope * image[slice_number].astype(np.float64)
             image[slice_number] = image[slice_number].astype(np.int16)
-            
+
         image[slice_number] += np.int16(intercept)
-    
+
     return np.array(image, dtype=np.int16)
 
 
@@ -80,9 +80,9 @@ def resample(image, scan, new_spacing=[1,1,1]):
     new_shape = np.round(new_real_shape)
     real_resize_factor = new_shape / image.shape
     new_spacing = spacing / real_resize_factor
-    
+
     image = scipy.ndimage.interpolation.zoom(image, real_resize_factor, mode='nearest')
-    
+
     return image, new_spacing
 
 
@@ -94,12 +94,12 @@ def resample_new(image, scan, target_size=[128,256,256]):
     spacing = np.array([scan[0].SliceThickness] + scan[0].PixelSpacing, dtype=np.float32)
     real_resize_factor = np.array(target_size) / image.shape
     new_spacing = spacing / real_resize_factor
-    
+
     image = scipy.ndimage.interpolation.zoom(image, real_resize_factor, mode='nearest')
-    
+
     return image, new_spacing
 
-    
+
 def normalize(image):
     image = (image - MIN_BOUND) / (MAX_BOUND - MIN_BOUND)
     image[image>1] = 1.
@@ -137,7 +137,7 @@ def shift(zoom_img, target_size, max_index):
         shift_1 = int((target_size-image_x_size)/2)
         shift_2 = 0
     shift = (shift_0, shift_1, shift_2)
-    
+
     return shift
 
 
@@ -170,7 +170,7 @@ def delete_dir(path):
         shutil.rmtree(path)
         print('successfully remove directory from {}!'.format(path))
 
-            
+
 
 
 def main():
@@ -226,8 +226,8 @@ def main():
     patient_id_keys = [filename.split('/') for filename in all_keys]
     patient_id_keys = [i[1] for i in patient_id_keys]
     patient_id = np.unique(patient_id_keys)
-    patient_id.sort()           
-    
+    patient_id.sort()
+
     s3_client = boto3.client('s3')
     patients_pixels_resampled = []
     patients_spacing = []
@@ -250,7 +250,7 @@ def main():
         patients.sort()
         patients_scans = [load_scan(os.path.join(input_dir,id)) for id in patients[:args.count]]
         patients_img = [get_pixels_hu(patient_scans) for patient_scans in patients_scans]
- 
+
         #patients_pixels_resampled = []
         #patients_spacing = []
         #output = []
@@ -258,7 +258,7 @@ def main():
             filename = "%s%s" %(patients[i],filetype)
             newPath = os.path.join(input_dir,filename)
             if not os.path.exists(newPath):
-                patient_pixels_resampled, patient_spacing = resample_new(patients_img[i], patients_scans[i], [32,64,64])
+                patient_pixels_resampled, patient_spacing = resample_new(patients_img[i], patients_scans[i], [128,512,512])
                 patients_pixels_resampled.append(patient_pixels_resampled)
                 patients_spacing.append(patient_spacing)
                 patient_pixels_normalized = normalize(patient_pixels_resampled)
@@ -267,7 +267,7 @@ def main():
                 img_z_size = patient_pixels_resampled.shape[0]
                 img_x_size = patient_pixels_resampled.shape[1]
                 img_y_size = patient_pixels_resampled.shape[2]
-        
+
                 output.append((patients[i],img_x_size, img_y_size, img_z_size, patient_spacing[1], patient_spacing[2], patient_spacing[0]))
 
                 #print((output))
@@ -275,22 +275,22 @@ def main():
                 logger.debug("Shape after resampling\t{}".format(patient_pixels_resampled.shape))
                 np.save(newPath, patient_pixels_zero_centered)
                 s3_client.upload_file(newPath,args.s3bucket,os.path.join(args.output,os.path.basename(newPath)))
-            
+
                 shutil.rmtree(os.path.join(input_dir,patients[i]))
                 logger.debug("Successfully uploaded image: {} to S3".format(newPath))
-                
+
                 os.remove(newPath)
             else:
                 logger.debug("Pre-processed image: {}  already exists!".format(newPath))
 
         patient_id = np.delete(patient_id, np.arange(args.count))
-    
+
     df_output = pd.DataFrame.from_records(output)
     df_output.columns = ['id', 'img_x_size', 'img_y_size', 'img_z_size','spacing_x', 'spacing_y', 'spacing_z']
     df_output.to_csv(os.path.join(input_dir,'preprocessing_img_info_%d.csv' %(args.count)),index=False)
     s3_client.upload_file(os.path.join(input_dir, 'preprocessing_img_info_%d.csv' %(args.count)), args.s3bucket, 'preprocessing_img_info_%d.csv' %(args.count))
     logger.debug("Successfully uploaded csv: {} to S3".format('preprocessing_img_info_%d.csv' %(args.count)))
-    
+
 
 if __name__ == "__main__":
     sys.exit(main())
