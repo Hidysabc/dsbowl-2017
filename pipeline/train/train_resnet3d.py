@@ -24,7 +24,7 @@ input_sample_images = "sample_images"
 input_preprocessing_images = "preprocessing_images"
 input_csv = "csv"
 input_dir = '/tmp/'
-batch_size = 5
+batch_size = 2
 NB_CLASSES = 2
 
 
@@ -114,7 +114,7 @@ model.compile(loss='binary_crossentropy',
 
 gen = generate_data_from_directory(image_path, csv_path, batch_size)
 history = model.fit_generator(gen,
-                              samples_per_epoch = 19,
+                              steps_per_epoch = 10,
                               nb_epoch=3,
                               verbose = 1)
 
