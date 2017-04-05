@@ -213,6 +213,13 @@ def main():
         help = "Output folder, the folder which stores a collection of preprocessing images in *.npy format",
         default= "preprocessing_images"
     )
+    parser.add_argument(
+        "--labels_csv",
+        metavar="LABELS_CSV",
+        type=str,
+        help = "stage1 csv files which stores the info of images' ids and cancer",
+        default= "stage1_labels.csv"
+    )
 
     args = parser.parse_args()
     input_dir = '/tmp/'
@@ -290,6 +297,21 @@ def main():
     df_output.to_csv(os.path.join(input_dir,'preprocessing_img_info_%d.csv' %(args.count)),index=False)
     s3_client.upload_file(os.path.join(input_dir, 'preprocessing_img_info_%d.csv' %(args.count)), args.s3bucket, 'preprocessing_img_info_%d.csv' %(args.count))
     logger.debug("Successfully uploaded csv: {} to S3".format('preprocessing_img_info_%d.csv' %(args.count)))
+    df_output.set_index("id", drop=True, inplace=True)
+
+    labels_csv = args.labels_csv
+    s3_client.download_file(args.s3bucket, labels_csv, os.path.join(input_dir, labels_csv))
+    labels_csv_path = os.path.join(input_dir, labels_csv)
+    #df_scan = pd.read_csv(args.preprocessing_csv)
+    df_label = pd.read_csv(labels_csv_path)
+    df_label = df_label[df_label.id.isin(df_output.index)]
+    df_all = df_label.join(df_output, on = 'id')
+    #df_all = pd.merge(df_scan_dicom, df_all, on = 'id')
+    name = 'sample_imgs_info_all.csv'
+    filepath = os.path.join(input_dir,name)
+    df_all.to_csv(filepath, index=False)
+    s3_client.upload_file(filepath, args.s3bucket, os.path.basename(filepath))
+    logger.debug("Successfully uploaded csv: {} to S3".format(os.path.basename(filepath)))
 
 
 if __name__ == "__main__":
