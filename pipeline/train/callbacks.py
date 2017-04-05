@@ -37,6 +37,7 @@ class ModelCheckpointS3(Callback):
             is saved (`model.save(filepath)`).
         period: Interval (number of epochs) between checkpoints.
     """
+    s3_client = boto3.client('s3')
 
     def __init__(self, filepath, bucket= "dsbowl2017-sample-images",
                  monitor='val_loss', verbose=0,
@@ -96,6 +97,10 @@ class ModelCheckpointS3(Callback):
                         else:
                             self.model.save(filepath, overwrite=True)
                             s3_client.upload_file(filepath, self.bucket, os.path.basename(filepath))
+                            print('Epoch %05d: %s improved from %0.5f to %0.5f,'
+                                  ' saving model to S3 %s'
+                                  % (epoch, self.monitor, self.best,
+                                     current, filepath))
 
                     else:
                         if self.verbose > 0:
@@ -109,4 +114,8 @@ class ModelCheckpointS3(Callback):
                 else:
                     self.model.save(filepath, overwrite=True)
                     s3_client.upload_file(filepath, self.bucket, os.path.basename(filepath))
+                    print('Epoch %05d: %s improved from %0.5f to %0.5f,'
+                                  ' saving model to S3 %s'
+                                  % (epoch, self.monitor, self.best,
+                                     current, filepath))
 

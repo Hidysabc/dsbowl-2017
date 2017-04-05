@@ -53,7 +53,7 @@ def main():
     patients.sort()
     patients_scans = [load_scan(os.path.join(args.input,id)) for id in patients]
     patients_img = [get_pixels_hu(patient_scans) for patient_scans in patients_scans]
-    
+
     #patients_pixels_resampled, patients_spacing = [resample(patient_img, patient_scans, [2,1,1]) for patient_img,  patient_scans in zip(patients_img, patients_scans)]
     directory = os.path.join(args.output)
     if not os.path.exists(directory):
@@ -72,7 +72,7 @@ def main():
             img_x_size = patient_pixels_resampled.shape[1]
             img_y_size = patient_pixels_resampled.shape[2]
             output.append((patients[i],img_x_size, img_y_size, img_z_size, patient_spacing[1], patient_spacing[2], patient_spacing[0]))
-        
+
             print((output))
             logger.debug("Shape before resampling\t{}".format(patients_img[i].shape))
             logger.debug("Shape after resampling\t{}".format(patient_pixels_resampled.shape))

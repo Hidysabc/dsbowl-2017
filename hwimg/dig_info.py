@@ -16,7 +16,7 @@ def scan_dicom(patient_id, patients_folder):
         slice_thickness = np.abs(slices[0].ImagePositionPatient[2] - slices[1].ImagePositionPatient[2])
     except:
         slice_thickness = np.abs(slices[0].SliceLocation - slices[1].SliceLocation)
-                    
+
     for s in slices:
         s.SliceThickness = slice_thickness
     img = np.stack([s.pixel_array for s in slices])
@@ -72,7 +72,7 @@ def main():
             help="Folder which stores the preprocessed images in .npy",
             default= "/workspace/dsbowl2017/data/preprocessing_images"
     )
-    
+
     args = parser.parse_args()
     patients = os.listdir(args.patients_folder)
     df_scan_dicom = [scan_dicom(patient_id, args.patients_folder) for patient_id in patients]
@@ -93,4 +93,4 @@ def main():
 
 if __name__=="__main__":
     sys.exit(main())
-        
+
