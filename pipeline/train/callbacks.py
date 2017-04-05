@@ -37,7 +37,6 @@ class ModelCheckpointS3(Callback):
             is saved (`model.save(filepath)`).
         period: Interval (number of epochs) between checkpoints.
     """
-    s3_client = boto3.client('s3')
 
     def __init__(self, filepath, bucket= "dsbowl2017-sample-images",
                  monitor='val_loss', verbose=0,
@@ -107,6 +106,10 @@ class ModelCheckpointS3(Callback):
                             print('Epoch %05d: %s did not improve' %
                                   (epoch, self.monitor))
             else:
+                current = logs.get(self.monitor)
+                if current is None:
+                    warnings.warn('Can save best model only with %s available, '
+                                  'skipping.' % (self.monitor), RuntimeWarning)
                 if self.verbose > 0:
                     print('Epoch %05d: saving model to %s' % (epoch, filepath))
                 if self.save_weights_only:

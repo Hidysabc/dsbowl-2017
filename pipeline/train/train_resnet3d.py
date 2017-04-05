@@ -195,18 +195,20 @@ model.compile(loss='binary_crossentropy',
               metrics=['accuracy'])
 
 
-train_images, validate_images, test_images = split_data(image_path, csv_path, train_ratio=0.85, validate_ratio=0.05)
-gen = generate_train_data_from_directory(train_images, csv_path, batch_size)
-
+train_images, validate_images, test_images = split_data(image_path, csv_path, train_ratio=0.85, validate_ratio=0.15)
+train_gen = generate_train_data_from_directory(train_images, csv_path, batch_size)
+validate_gen = generate_train_data_from_directory(validate_images, csv_path, batch_size)
 
 checkpointer = ModelCheckpointS3(monitor='val_loss',filepath="/tmp/models.hdf5",
                                  bucket = s3bucket,
                                  verbose=0, save_best_only=True)
 
-history = model.fit_generator(gen,
-                              steps_per_epoch = 10,
+history = model.fit_generator(train_gen,
+                              steps_per_epoch = int(len(train_images)/batch_size+0.5),
                               nb_epoch=3,
                               verbose = 1,
+                              validation_data= validate_gen,
+                              validation_steps = int(len(validate_images)/batch_size+0.5),
                               callbacks= [checkpointer])
 
 model.save("{}.h5".format(model_name))
