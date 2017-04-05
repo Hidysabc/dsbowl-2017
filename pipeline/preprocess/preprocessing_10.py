@@ -258,7 +258,7 @@ def main():
             filename = "%s%s" %(patients[i],filetype)
             newPath = os.path.join(input_dir,filename)
             if not os.path.exists(newPath):
-                patient_pixels_resampled, patient_spacing = resample_new(patients_img[i], patients_scans[i], [128,512,512])
+                patient_pixels_resampled, patient_spacing = resample_new(patients_img[i], patients_scans[i], [128,256,256])
                 patients_pixels_resampled.append(patient_pixels_resampled)
                 patients_spacing.append(patient_spacing)
                 patient_pixels_normalized = normalize(patient_pixels_resampled)

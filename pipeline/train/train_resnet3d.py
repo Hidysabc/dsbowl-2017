@@ -6,8 +6,7 @@ import logging
 import pandas as pd
 from scipy import stats
 from keras.utils import np_utils
-from keras.datasets import mnist
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Dropout, Activation, Reshape, Flatten
 from keras.layers.convolutional import Convolution3D
 from keras.layers.pooling import MaxPooling3D
@@ -15,7 +14,8 @@ from keras.layers.normalization import BatchNormalization
 from keras.optimizers import RMSprop, Adam
 import boto3
 from resnet3d import Resnet3DBuilder
-
+import sys
+from callbacks import ModelCheckpointS3
 
 model_name = "hw-resnet3d-18"
 
@@ -80,23 +80,97 @@ csv_path = os.path.join(input_dir,csv_info[0])
 #images = [f for f in os.listdir(path) if f.endswith('.npy')]
 #images = [f for f in images if f.replace(".npy","") in labels_info.index]
 
-
-def generate_data_from_directory(image_path, csv_path, batch_size, nb_classes=NB_CLASSES):
+def split_data(image_path, csv_path, train_ratio=0.85, validate_ratio=0.05):
     images = [f for f in os.listdir(image_path) if f.endswith('.npy')]
+    labels_info = pd.read_csv(csv_path)
+    CANCER_MAP = labels_info.set_index('id')['cancer'].to_dict()
+    labels_info.set_index("id", drop=True, inplace = True)
+    images = [f for f in images if f.replace(".npy","") in labels_info.index]
+    cancer_images = [f for f in images if CANCER_MAP[f.replace(".npy","")]==1]
+    noncancer_images = [f for f in images if f not in cancer_images]
+    train_cancer_images = cancer_images[:int(len(cancer_images)*train_ratio+0.5)]
+    validate_cancer_images = cancer_images[len(train_cancer_images):len(train_cancer_images)
+                                           +int(len(cancer_images)*validate_ratio+0.5)]
+    test_cancer_images = cancer_images[len(train_cancer_images)+len(validate_cancer_images)
+                                       :len(train_cancer_images)+len(validate_cancer_images)
+                                       +int(len(cancer_images)*(1-train_ratio-validate_ratio)+0.5)]
+    train_noncancer_images = noncancer_images[:int(len(noncancer_images)*train_ratio+0.5)]
+    validate_noncancer_images = noncancer_images[len(train_noncancer_images):len(train_noncancer_images)
+                                           +int(len(noncancer_images)*validate_ratio+0.5)]
+    test_noncancer_images = noncancer_images[len(train_noncancer_images)+len(validate_noncancer_images)
+                                       :len(train_noncancer_images)+len(validate_noncancer_images)
+                                       +int(len(noncancer_images)*(1-train_ratio-validate_ratio)+0.5)]
+    train_images = train_cancer_images+train_noncancer_images
+    validate_images = validate_cancer_images+validate_noncancer_images
+    test_images = test_cancer_images+test_noncancer_images
+
+    return (train_images, validate_images, test_images)
+
+def generate_train_data_from_directory(images, csv_path, batch_size, nb_classes=NB_CLASSES):
+    #images = [f for f in os.listdir(image_path) if f.endswith('.npy')]
     labels_info = pd.read_csv(os.path.join(input_dir, csv_path))
     CANCER_MAP = labels_info.set_index('id')['cancer'].to_dict()
     labels_info.set_index("id", drop=True, inplace=True)
-    images = [f for f in images if f.replace(".npy","") in labels_info.index]
-    images_id = [f.replace(".npy","") for f in images]
+    #images = [f for f in images if f.replace(".npy","") in labels_info.index]
+    ##images_id = [f.replace(".npy","") for f in images]
     while 1:
+        #permute index
+        p_images = np.random.permutation(images)
+        p_images_id = [f.replace(".npy","") for f in p_images]
         for i in np.arange(int(len(images)/batch_size+0.5)):
-            imgs = images[i*batch_size:(i+1)*batch_size]
-            imgs_id = images_id[i*batch_size:(i+1)*batch_size]
+            imgs = p_images[i*batch_size:(i+1)*batch_size]
+            imgs_id = p_images_id[i*batch_size:(i+1)*batch_size]
             img_array = np.array([np.load(os.path.join(image_path, j)) for j in imgs])
             #print((len(img_array)))
             label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id], nb_classes)
             #[print(l) for l in label]
             yield (np.reshape(img_array, (img_array.shape[0],img_array.shape[1],img_array.shape[2], img_array.shape[3],1)),label)
+
+
+def generate_validate_data_from_directory(images, csv_path, batch_size, nb_classes=NB_CLASSES):
+    #images = [f for f in os.listdir(image_path) if f.endswith('.npy')]
+    labels_info = pd.read_csv(os.path.join(input_dir, csv_path))
+    CANCER_MAP = labels_info.set_index('id')['cancer'].to_dict()
+    labels_info.set_index("id", drop=True, inplace=True)
+    #images = [f for f in images if f.replace(".npy","") in labels_info.index]
+    ##images_id = [f.replace(".npy","") for f in images]
+    while 1:
+        #permute index
+        p_images = np.random.permutation(images)
+        p_images_id = [f.replace(".npy","") for f in p_images]
+        for i in np.arange(int(len(images)/batch_size+0.5)):
+            imgs = p_images[i*batch_size:(i+1)*batch_size]
+            imgs_id = p_images_id[i*batch_size:(i+1)*batch_size]
+            img_array = np.array([np.load(os.path.join(image_path, j)) for j in imgs])
+            #print((len(img_array)))
+            label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id], nb_classes)
+            #[print(l) for l in label]
+            yield (np.reshape(img_array, (img_array.shape[0],img_array.shape[1],img_array.shape[2], img_array.shape[3],1)),label)
+
+
+def generate_test_data_from_directory(images, csv_path, batch_size, nb_classes=NB_CLASSES):
+    #images = [f for f in os.listdir(image_path) if f.endswith('.npy')]
+    labels_info = pd.read_csv(os.path.join(input_dir, csv_path))
+    CANCER_MAP = labels_info.set_index('id')['cancer'].to_dict()
+    labels_info.set_index("id", drop=True, inplace=True)
+    #images = [f for f in images if f.replace(".npy","") in labels_info.index]
+    ##images_id = [f.replace(".npy","") for f in images]
+    while 1:
+        #permute index
+        p_images = np.random.permutation(images)
+        p_images_id = [f.replace(".npy","") for f in p_images]
+        for i in np.arange(int(len(images)/batch_size+0.5)):
+            imgs = p_images[i*batch_size:(i+1)*batch_size]
+            imgs_id = p_images_id[i*batch_size:(i+1)*batch_size]
+            img_array = np.array([np.load(os.path.join(image_path, j)) for j in imgs])
+            #print((len(img_array)))
+            label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id], nb_classes)
+            #[print(l) for l in label]
+            yield (np.reshape(img_array, (img_array.shape[0],img_array.shape[1],img_array.shape[2], img_array.shape[3],1)),label)
+
+
+
+
 
 '''
 tmp = [(img.replace('.npy', ''), np.load(os.path.join(path, img))) for img in images]
@@ -105,18 +179,35 @@ X = np.array([x[1] for x in tmp])
 X = X.reshape((X.shape[0], X.shape[1], X.shape[2], X.shape[3], 1))
 y = np_utils.to_categorical([CANCER_MAP[c[0]] for c in tmp])
 '''
-logger.info("Start building model...")
-model = Resnet3DBuilder.build_resnet3D_18((1,128,512,512),2)
+
+if len(sys.argv)>1:
+    logger.info("Start loading model...")
+    model_path = os.path.join(input_dir, sys.argv[1])
+    s3_client.download_file(s3bucket, sys.argv[1], model_path)
+    model = load_model(model_path)
+else:
+    logger.info("Start building model...")
+    model = Resnet3DBuilder.build_resnet3D_18((1,128,256,256),2)
+
+
 model.compile(loss='binary_crossentropy',
               optimizer=Adam(),
               metrics=['accuracy'])
 
 
-gen = generate_data_from_directory(image_path, csv_path, batch_size)
+train_images, validate_images, test_images = split_data(image_path, csv_path, train_ratio=0.85, validate_ratio=0.05)
+gen = generate_train_data_from_directory(train_images, csv_path, batch_size)
+
+
+checkpointer = ModelCheckpointS3(monitor='val_loss',filepath="/tmp/models.hdf5",
+                                 bucket = s3bucket,
+                                 verbose=0, save_best_only=True)
+
 history = model.fit_generator(gen,
                               steps_per_epoch = 10,
                               nb_epoch=3,
-                              verbose = 1)
+                              verbose = 1,
+                              callbacks= [checkpointer])
 
 model.save("{}.h5".format(model_name))
 logger.info("Finish! :)")
