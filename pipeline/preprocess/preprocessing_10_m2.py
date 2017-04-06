@@ -229,6 +229,7 @@ def main():
     s3 = boto3.resource('s3')
     bucket = s3.Bucket(args.s3bucket)
     all_keys = [obj.key for obj in bucket.objects.all()]
+    bucket_all_keys = all_keys
     all_keys = [i for i in all_keys if args.input in i]
     patient_id_keys = [filename.split('/') for filename in all_keys]
     patient_id_keys = [i[1] for i in patient_id_keys]
@@ -248,49 +249,54 @@ def main():
             pathname = os.path.join(input_dir, os.path.dirname(patient_imgs_keys[0]).split('/')[1])
             if not os.path.exists(pathname):
                 os.mkdir(pathname)
-            [s3_client.download_file(args.s3bucket, key, os.path.join(pathname,os.path.basename(key))) for key in patient_imgs_keys]
-            logger.debug("Successfully downloaded images from S3 patient_id:{}!".format(tmp_patient_id[i]))
+                if os.path.join(args.output,tmp_patient_id[i],'.npy') in bucket_all_keys:
+                    logger.debug("Pre-processed image: {}.npy  already exists in S3!".format(tmp_patient_id[i]))
+
+                else:
+                    [s3_client.download_file(args.s3bucket, key, os.path.join(pathname,os.path.basename(key))) for key in patient_imgs_keys]
+                    logger.debug("Successfully downloaded images from S3 patient_id:{}!".format(tmp_patient_id[i]))
             '''
             objs = [bucket.objects.filter(Prefix=key) for key in patient_imgs_keys]
             for obj in objs:
                 s3.Object(bucket.name, obj.key).delete()
             '''
         patients = os.listdir(input_dir)
-        patients.sort()
-        patients_scans = [load_scan(os.path.join(input_dir,id)) for id in patients]
-        patients_img = [get_pixels_hu(patient_scans) for patient_scans in patients_scans]
+        if len(patients)>0:
+            patients.sort()
+            patients_scans = [load_scan(os.path.join(input_dir,id)) for id in patients]
+            patients_img = [get_pixels_hu(patient_scans) for patient_scans in patients_scans]
 
         #patients_pixels_resampled = []
         #patients_spacing = []
-        #output = []
-        for i in np.arange(len(patients)):
-            filename = "%s%s" %(patients[i],filetype)
-            newPath = os.path.join(input_dir,filename)
-            if not os.path.exists(newPath):
-                patient_pixels_resampled, patient_spacing = resample_new(patients_img[i], patients_scans[i], [128,256,256])
-                patients_pixels_resampled.append(patient_pixels_resampled)
-                patients_spacing.append(patient_spacing)
-                patient_pixels_normalized = normalize(patient_pixels_resampled)
-                patient_pixels_zero_centered = zero_center(patient_pixels_normalized)
+            for i in np.arange(len(patients)):
+                filename = "%s%s" %(patients[i],filetype)
+                newPath = os.path.join(input_dir,filename)
+                if not os.path.exists(newPath):
+                    patient_pixels_resampled, patient_spacing = resample_new(patients_img[i], patients_scans[i], [128,256,256])
+                    patients_pixels_resampled.append(patient_pixels_resampled)
+                    patients_spacing.append(patient_spacing)
+                    patient_pixels_normalized = normalize(patient_pixels_resampled)
+                    patient_pixels_zero_centered = zero_center(patient_pixels_normalized)
 
-                img_z_size = patient_pixels_resampled.shape[0]
-                img_x_size = patient_pixels_resampled.shape[1]
-                img_y_size = patient_pixels_resampled.shape[2]
+                    img_z_size = patient_pixels_resampled.shape[0]
+                    img_x_size = patient_pixels_resampled.shape[1]
+                    img_y_size = patient_pixels_resampled.shape[2]
 
-                output.append((patients[i],img_x_size, img_y_size, img_z_size, patient_spacing[1], patient_spacing[2], patient_spacing[0]))
+                    output.append((patients[i],img_x_size, img_y_size, img_z_size, patient_spacing[1], patient_spacing[2], patient_spacing[0]))
 
-                #print((output))
-                logger.debug("Shape before resampling\t{}".format(patients_img[i].shape))
-                logger.debug("Shape after resampling\t{}".format(patient_pixels_resampled.shape))
-                np.save(newPath, patient_pixels_zero_centered)
-                s3_client.upload_file(newPath,args.s3bucket,os.path.join(args.output,os.path.basename(newPath)))
+                    #print((output))
+                    logger.debug("Shape before resampling\t{}".format(patients_img[i].shape))
+                    logger.debug("Shape after resampling\t{}".format(patient_pixels_resampled.shape))
+                    np.save(newPath, patient_pixels_zero_centered)
+                    s3_client.upload_file(newPath,args.s3bucket,os.path.join(args.output,os.path.basename(newPath)))
 
-                shutil.rmtree(os.path.join(input_dir,patients[i]))
-                logger.debug("Successfully uploaded image: {} to S3".format(newPath))
+                    shutil.rmtree(os.path.join(input_dir,patients[i]))
+                    logger.debug("Successfully uploaded image: {} to S3".format(newPath))
 
-                os.remove(newPath)
-            else:
-                logger.debug("Pre-processed image: {}  already exists!".format(newPath))
+                    os.remove(newPath)
+                else:
+                    logger.debug("Pre-processed image: {}  already exists!".format(newPath))
+
 
         #patient_id = np.delete(patient_id, np.arange(args.count))
 
