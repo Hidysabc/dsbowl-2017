@@ -247,14 +247,14 @@ def main():
         for i in np.arange(len(tmp_patient_id)):
             patient_imgs_keys = [j for j in all_keys if tmp_patient_id[i] in j]
             pathname = os.path.join(input_dir, os.path.dirname(patient_imgs_keys[0]).split('/')[1])
-            if not os.path.exists(pathname):
-                os.mkdir(pathname)
-                if os.path.join(args.output,tmp_patient_id[i],'.npy') in bucket_all_keys:
-                    logger.debug("Pre-processed image: {}.npy  already exists in S3!".format(tmp_patient_id[i]))
+            if os.path.join(args.output,tmp_patient_id[i],'.npy') in bucket_all_keys:
+                logger.debug("Pre-processed image: {}.npy  already exists in S3!".format(tmp_patient_id[i]))
 
-                else:
-                    [s3_client.download_file(args.s3bucket, key, os.path.join(pathname,os.path.basename(key))) for key in patient_imgs_keys]
-                    logger.debug("Successfully downloaded images from S3 patient_id:{}!".format(tmp_patient_id[i]))
+            else:
+                if not os.path.exists(pathname):
+                    os.mkdir(pathname)
+                [s3_client.download_file(args.s3bucket, key, os.path.join(pathname,os.path.basename(key))) for key in patient_imgs_keys]
+                logger.debug("Successfully downloaded images from S3 patient_id:{}!".format(tmp_patient_id[i]))
             '''
             objs = [bucket.objects.filter(Prefix=key) for key in patient_imgs_keys]
             for obj in objs:
@@ -299,28 +299,29 @@ def main():
 
 
         #patient_id = np.delete(patient_id, np.arange(args.count))
+    if len(output)>0:
+        df_output = pd.DataFrame.from_records(output)
+        df_output.columns = ['id', 'img_x_size', 'img_y_size', 'img_z_size','spacing_x', 'spacing_y', 'spacing_z']
+        df_output.to_csv(os.path.join(input_dir,'preprocessing_img_info_%d.csv' %(args.count)),index=False)
+        s3_client.upload_file(os.path.join(input_dir, 'preprocessing_img_info_%d.csv' %(args.count)), args.s3bucket, 'preprocessing_img_info_%d.csv' %(args.count))
+        logger.debug("Successfully uploaded csv: {} to S3".format('preprocessing_img_info_%d.csv' %(args.count)))
+        df_output.set_index("id", drop=True, inplace=True)
 
-    df_output = pd.DataFrame.from_records(output)
-    df_output.columns = ['id', 'img_x_size', 'img_y_size', 'img_z_size','spacing_x', 'spacing_y', 'spacing_z']
-    df_output.to_csv(os.path.join(input_dir,'preprocessing_img_info_%d.csv' %(args.count)),index=False)
-    s3_client.upload_file(os.path.join(input_dir, 'preprocessing_img_info_%d.csv' %(args.count)), args.s3bucket, 'preprocessing_img_info_%d.csv' %(args.count))
-    logger.debug("Successfully uploaded csv: {} to S3".format('preprocessing_img_info_%d.csv' %(args.count)))
-    df_output.set_index("id", drop=True, inplace=True)
-
-    labels_csv = args.labels_csv
-    s3_client.download_file(args.s3bucket, labels_csv, os.path.join(input_dir, labels_csv))
-    labels_csv_path = os.path.join(input_dir, labels_csv)
-    #df_scan = pd.read_csv(args.preprocessing_csv)
-    df_label = pd.read_csv(labels_csv_path)
-    df_label = df_label[df_label.id.isin(df_output.index)]
-    df_all = df_label.join(df_output, on = 'id')
-    #df_all = pd.merge(df_scan_dicom, df_all, on = 'id')
-    name = 'sample_imgs_info_all.csv'
-    filepath = os.path.join(input_dir,name)
-    df_all.to_csv(filepath, index=False)
-    s3_client.upload_file(filepath, args.s3bucket, os.path.basename(filepath))
-    logger.debug("Successfully uploaded csv: {} to S3".format(os.path.basename(filepath)))
-
+        labels_csv = args.labels_csv
+        s3_client.download_file(args.s3bucket, labels_csv, os.path.join(input_dir, labels_csv))
+        labels_csv_path = os.path.join(input_dir, labels_csv)
+        #df_scan = pd.read_csv(args.preprocessing_csv)
+        df_label = pd.read_csv(labels_csv_path)
+        df_label = df_label[df_label.id.isin(df_output.index)]
+        df_all = df_label.join(df_output, on = 'id')
+        #df_all = pd.merge(df_scan_dicom, df_all, on = 'id')
+        name = 'sample_imgs_info_all.csv'
+        filepath = os.path.join(input_dir,name)
+        df_all.to_csv(filepath, index=False)
+        s3_client.upload_file(filepath, args.s3bucket, os.path.basename(filepath))
+        logger.debug("Successfully uploaded csv: {} to S3".format(os.path.basename(filepath)))
+    else:
+        logger.debug("Already preprocess all the images!!!!")
 
 if __name__ == "__main__":
     sys.exit(main())
