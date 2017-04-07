@@ -315,7 +315,7 @@ def main():
         df_label = df_label[df_label.id.isin(df_output.index)]
         df_all = df_label.join(df_output, on = 'id')
         #df_all = pd.merge(df_scan_dicom, df_all, on = 'id')
-        name = 'sample_imgs_info_all.csv'
+        name = 'sample_img_info_all.csv'
         filepath = os.path.join(input_dir,name)
         df_all.to_csv(filepath, index=False)
         s3_client.upload_file(filepath, args.s3bucket, os.path.basename(filepath))
