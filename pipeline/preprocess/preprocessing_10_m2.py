@@ -247,7 +247,7 @@ def main():
         for i in np.arange(len(tmp_patient_id)):
             patient_imgs_keys = [j for j in all_keys if tmp_patient_id[i] in j]
             pathname = os.path.join(input_dir, os.path.dirname(patient_imgs_keys[0]).split('/')[1])
-            if os.path.join(args.output,tmp_patient_id[i],'.npy') in bucket_all_keys:
+            if os.path.join(args.output,tmp_patient_id[i]+filetype) in bucket_all_keys:
                 logger.debug("Pre-processed image: {}.npy  already exists in S3!".format(tmp_patient_id[i]))
 
             else:
