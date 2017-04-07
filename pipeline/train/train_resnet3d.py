@@ -106,7 +106,7 @@ def split_data(image_path, csv_path, train_ratio=0.85, validate_ratio=0.05):
 
     return (train_images, validate_images, test_images)
 
-def generate_train_data_from_directory(images, csv_path, batch_size, nb_classes=NB_CLASSES):
+def generate_data_from_directory(images, csv_path, batch_size, nb_classes=NB_CLASSES):
     #images = [f for f in os.listdir(image_path) if f.endswith('.npy')]
     labels_info = pd.read_csv(os.path.join(input_dir, csv_path))
     CANCER_MAP = labels_info.set_index('id')['cancer'].to_dict()
@@ -125,51 +125,6 @@ def generate_train_data_from_directory(images, csv_path, batch_size, nb_classes=
             label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id], nb_classes)
             #[print(l) for l in label]
             yield (np.reshape(img_array, (img_array.shape[0],img_array.shape[1],img_array.shape[2], img_array.shape[3],1)),label)
-
-
-def generate_validate_data_from_directory(images, csv_path, batch_size, nb_classes=NB_CLASSES):
-    #images = [f for f in os.listdir(image_path) if f.endswith('.npy')]
-    labels_info = pd.read_csv(os.path.join(input_dir, csv_path))
-    CANCER_MAP = labels_info.set_index('id')['cancer'].to_dict()
-    labels_info.set_index("id", drop=True, inplace=True)
-    #images = [f for f in images if f.replace(".npy","") in labels_info.index]
-    ##images_id = [f.replace(".npy","") for f in images]
-    while 1:
-        #permute index
-        p_images = np.random.permutation(images)
-        p_images_id = [f.replace(".npy","") for f in p_images]
-        for i in np.arange(int(len(images)/batch_size+0.5)):
-            imgs = p_images[i*batch_size:(i+1)*batch_size]
-            imgs_id = p_images_id[i*batch_size:(i+1)*batch_size]
-            img_array = np.array([np.load(os.path.join(image_path, j)) for j in imgs])
-            #print((len(img_array)))
-            label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id], nb_classes)
-            #[print(l) for l in label]
-            yield (np.reshape(img_array, (img_array.shape[0],img_array.shape[1],img_array.shape[2], img_array.shape[3],1)),label)
-
-
-def generate_test_data_from_directory(images, csv_path, batch_size, nb_classes=NB_CLASSES):
-    #images = [f for f in os.listdir(image_path) if f.endswith('.npy')]
-    labels_info = pd.read_csv(os.path.join(input_dir, csv_path))
-    CANCER_MAP = labels_info.set_index('id')['cancer'].to_dict()
-    labels_info.set_index("id", drop=True, inplace=True)
-    #images = [f for f in images if f.replace(".npy","") in labels_info.index]
-    ##images_id = [f.replace(".npy","") for f in images]
-    while 1:
-        #permute index
-        p_images = np.random.permutation(images)
-        p_images_id = [f.replace(".npy","") for f in p_images]
-        for i in np.arange(int(len(images)/batch_size+0.5)):
-            imgs = p_images[i*batch_size:(i+1)*batch_size]
-            imgs_id = p_images_id[i*batch_size:(i+1)*batch_size]
-            img_array = np.array([np.load(os.path.join(image_path, j)) for j in imgs])
-            #print((len(img_array)))
-            label = np_utils.to_categorical([CANCER_MAP[x] for x in imgs_id], nb_classes)
-            #[print(l) for l in label]
-            yield (np.reshape(img_array, (img_array.shape[0],img_array.shape[1],img_array.shape[2], img_array.shape[3],1)),label)
-
-
-
 
 
 '''
@@ -196,8 +151,8 @@ model.compile(loss='binary_crossentropy',
 
 
 train_images, validate_images, test_images = split_data(image_path, csv_path, train_ratio=0.85, validate_ratio=0.15)
-train_gen = generate_train_data_from_directory(train_images, csv_path, batch_size)
-validate_gen = generate_train_data_from_directory(validate_images, csv_path, batch_size)
+train_gen = generate_data_from_directory(train_images, csv_path, batch_size)
+validate_gen = generate_data_from_directory(validate_images, csv_path, batch_size)
 
 checkpointer = ModelCheckpointS3(monitor='val_loss',filepath="/tmp/models.hdf5",
                                  bucket = s3bucket,
