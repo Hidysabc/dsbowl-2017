@@ -231,7 +231,7 @@ def main():
     all_keys = [obj.key for obj in bucket.objects.all()]
     bucket_all_keys = all_keys
     all_keys = [i for i in all_keys if args.input in i]
-    patient_id_keys = [filename.split('/') for filename in all_keys]
+    patient_id_keys = [filename.split('/') for filename in all_keys if len(filename.split('/'))>2]
     patient_id_keys = [i[1] for i in patient_id_keys]
     patient_id = np.unique(patient_id_keys)
     patient_id.sort()
