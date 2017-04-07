@@ -242,6 +242,7 @@ def main():
     output = []
 
     #while(len(patient_id))>0:
+    err_cnt = 0
     for x in np.arange(int(len(patient_id)/args.count+0.5)):
         tmp_patient_id = patient_id[x*args.count:(x+1)*args.count]
         for i in np.arange(len(tmp_patient_id)):
@@ -253,8 +254,18 @@ def main():
             else:
                 if not os.path.exists(pathname):
                     os.mkdir(pathname)
-                [s3_client.download_file(args.s3bucket, key, os.path.join(pathname,os.path.basename(key))) for key in patient_imgs_keys]
+                for key in patient_imgs_keys:
+                    try:
+                        s3_client.download_file(args.s3bucket, key, os.path.join(pathname,os.path.basename(key)))
+                    except OSError:
+                        err_cnt = err_cnt+1
+                        logger.debug("OSError: {}".format(err_cnt))
+                        continue
+
                 logger.debug("Successfully downloaded images from S3 patient_id:{}!".format(tmp_patient_id[i]))
+
+                #[s3_client.download_file(args.s3bucket, key, os.path.join(pathname,os.path.basename(key))) for key in patient_imgs_keys]
+                #logger.debug("Successfully downloaded images from S3 patient_id:{}!".format(tmp_patient_id[i]))
             '''
             objs = [bucket.objects.filter(Prefix=key) for key in patient_imgs_keys]
             for obj in objs:
