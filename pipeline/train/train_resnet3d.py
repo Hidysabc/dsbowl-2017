@@ -24,7 +24,7 @@ s3bucket = "dsbowl2017-stage1-images"
 input_sample_images = "sample_images"
 input_preprocessing_images = "preprocessing_images"
 input_csv = "csv"
-input_dir = '/tmp/'
+input_dir = '/tmp/data/'
 batch_size = 4
 NB_CLASSES = 2
 train_ratio = 0.90
@@ -47,6 +47,7 @@ logger.setLevel(LOG_MAP["debug"])
 
 s3 = boto3.resource('s3')
 bucket = s3.Bucket(s3bucket)
+'''
 all_keys = [obj.key for obj in bucket.objects.all()]
 all_keys = [i for i in all_keys if input_preprocessing_images in i]
 patient_id_keys = [filename.split('/') for filename in all_keys]
@@ -58,7 +59,7 @@ patient_ids = [patient.replace('.npy','') for patient in patient_id]
 csv_keys = [obj.key for obj in bucket.objects.all()]
 csv_keys = [i for i in csv_keys if input_csv in i]
 csv_info = [i for i in csv_keys if "sample_img_info" in i]
-
+'''
 s3_client = boto3.client('s3')
 
 '''
@@ -84,7 +85,8 @@ labels_info.set_index("id", drop=True, inplace=True)
 '''
 
 image_path = os.path.join(input_dir, input_preprocessing_images)
-csv_path = os.path.join(input_dir,csv_info[0])
+csv_path = os.path.join(input_dir,"sample_img_info_all.csv")
+#csv_path = os.path.join(input_dir,csv_info[0])
 #images = [f for f in os.listdir(path) if f.endswith('.npy')]
 #images = [f for f in images if f.replace(".npy","") in labels_info.index]
 
