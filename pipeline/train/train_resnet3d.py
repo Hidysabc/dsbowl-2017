@@ -19,14 +19,17 @@ from callbacks import ModelCheckpointS3
 
 model_name = "hw-resnet3d-18"
 
-s3bucket = "dsbowl2017-sample-images"
+#s3bucket = "dsbowl2017-sample-images"
+s3bucket = "dsbowl2017-stage1-images"
 input_sample_images = "sample_images"
 input_preprocessing_images = "preprocessing_images"
 input_csv = "csv"
 input_dir = '/tmp/'
-batch_size = 2
+batch_size = 4
 NB_CLASSES = 2
-
+train_ratio = 0.90
+validate_ratio = 0.10
+nb_epoch = 100
 
 FORMAT = '%(asctime)-15s %(name)-8s %(levelname)s %(message)s'
 LOG_MAP = {
@@ -58,12 +61,17 @@ csv_info = [i for i in csv_keys if "sample_img_info" in i]
 
 s3_client = boto3.client('s3')
 
+'''
+Don't do download here. Try EBS volume...20170408 Hidy chiu
+
 if not os.path.exists(os.path.join(input_dir, csv_info[0])):
     s3_client.download_file(s3bucket, csv_info[0], os.path.join(input_dir,csv_info[0]))
 
 if not os.path.exists(os.path.join(input_dir, input_preprocessing_images)):
     os.mkdir(os.path.join(input_dir,input_preprocessing_images))
     [s3_client.download_file(s3bucket, os.path.join(input_preprocessing_images,patient), os.path.join(input_dir,input_preprocessing_images,patient)) for patient in patient_id]
+
+'''
 
 '''
 labels_info = pd.read_csv('/preprocessing_images_all/sample_images_.csv',
@@ -150,7 +158,7 @@ model.compile(loss='binary_crossentropy',
               metrics=['accuracy'])
 
 
-train_images, validate_images, test_images = split_data(image_path, csv_path, train_ratio=0.85, validate_ratio=0.15)
+train_images, validate_images, test_images = split_data(image_path, csv_path, train_ratio=train_ratio, validate_ratio=validate_ratio)
 train_gen = generate_data_from_directory(train_images, csv_path, batch_size)
 validate_gen = generate_data_from_directory(validate_images, csv_path, batch_size)
 
@@ -160,7 +168,7 @@ checkpointer = ModelCheckpointS3(monitor='val_loss',filepath="/tmp/models.hdf5",
 
 history = model.fit_generator(train_gen,
                               steps_per_epoch = int(len(train_images)/batch_size+0.5),
-                              nb_epoch=3,
+                              epochs = nb_epoch,
                               verbose = 1,
                               validation_data= validate_gen,
                               validation_steps = int(len(validate_images)/batch_size+0.5),
