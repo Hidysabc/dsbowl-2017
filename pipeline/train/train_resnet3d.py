@@ -6,6 +6,7 @@ import logging
 import pandas as pd
 from scipy import stats
 from keras.utils import np_utils
+from keras.callbacks import ReduceLROnPlateau
 from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Dropout, Activation, Reshape, Flatten
 from keras.layers.convolutional import Convolution3D
@@ -85,7 +86,7 @@ labels_info.set_index("id", drop=True, inplace=True)
 '''
 
 image_path = os.path.join(input_dir, input_preprocessing_images)
-csv_path = os.path.join(input_dir,"sample_img_info_all.csv")
+csv_path = os.path.join(input_dir,"stage1_img_info_all.csv")
 #csv_path = os.path.join(input_dir,csv_info[0])
 #images = [f for f in os.listdir(path) if f.endswith('.npy')]
 #images = [f for f in images if f.replace(".npy","") in labels_info.index]
@@ -164,19 +165,47 @@ train_images, validate_images, test_images = split_data(image_path, csv_path, tr
 train_gen = generate_data_from_directory(train_images, csv_path, batch_size)
 validate_gen = generate_data_from_directory(validate_images, csv_path, batch_size)
 
-checkpointer = ModelCheckpointS3(monitor='val_loss',filepath="/tmp/models.hdf5",
+checkpointer = ModelCheckpointS3(monitor='val_loss',filepath="/tmp/{}-best.hdf5".format(model_name),
                                  bucket = s3bucket,
                                  verbose=0, save_best_only=True)
 
+reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.5,
+patience=5, min_lr=1e-5)
+
+logger.info("Start training...")
 history = model.fit_generator(train_gen,
                               steps_per_epoch = int(len(train_images)/batch_size+0.5),
                               epochs = nb_epoch,
                               verbose = 1,
                               validation_data= validate_gen,
                               validation_steps = int(len(validate_images)/batch_size+0.5),
-                              callbacks= [checkpointer])
+                              callbacks= [checkpointer, reduce_lr])
 
-model.save("{}.h5".format(model_name))
+val_loss = history.history["val_loss"]
+val_acc = history.history["val_acc"]
+
+best_model_name = "{model_name}-best-{val_acc:.4f}-{val_loss:.4f}.hdf5".format(
+    model_name = model_name, val_acc = val_acc[np.argmin(val_loss)], val_loss = np.min(val_loss)
+)
+
+copy_source = {
+    "Bucket": s3bucket,
+    "Key": "{}-best.hdf5".format(model_name)
+}
+
+s3_client.copy(copy_source, s3bucket, best_model_name)
+
+logger.info("save final model")
+
+final_model_name = "{model_name}-{epochs}-{val_acc:.4f}-{val_loss:.4f}.hdf5"\
+    .format(model_name = model_name, epochs = nb_epoch,
+            val_acc = val_acc[-1], val_loss = val_loss[-1])
+
+final_model_path = "/tmp/{}".format(final_model_name)
+model.save(final_model_path)
+s3_client.upload_file(final_model_path, s3bucket, final_model_name)
+
+#model.save("{}.h5".format(model_name))
 logger.info("Finish! :)")
 #history = model.fit(X, y, nb_epoch=3, batch_size=2)
 
