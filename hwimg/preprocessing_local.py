@@ -38,7 +38,7 @@ def main():
         metavar="OUTPUT",
         type=str,
         help = "Output folder, the folder which stores a collection of preprocessing images in *.npy format",
-        default= "/workspace/dsbowl2017/data/preprocessing_images_all/"
+        default= "/tmp/preprocessing_images/"
     )
     parser.add_argument(
         "--logging",
@@ -47,23 +47,33 @@ def main():
         help = "Log level",
         default = "debug"
     )
+
     args = parser.parse_args()
+    filetype = ".npy"
 
     patients = os.listdir(args.input)
     patients.sort()
-    patients_scans = [load_scan(os.path.join(args.input,id)) for id in patients]
-    patients_img = [get_pixels_hu(patient_scans) for patient_scans in patients_scans]
+    #patients_scans = [load_scan(os.path.join(args.input,id)) for id in patients]
+    #patients_img = [get_pixels_hu(patient_scans) for patient_scans in patients_scans]
 
     #patients_pixels_resampled, patients_spacing = [resample(patient_img, patient_scans, [2,1,1]) for patient_img,  patient_scans in zip(patients_img, patients_scans)]
-    directory = os.path.join(args.output)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-        patients_pixels_resampled = []
-        patients_spacing = []
-        output = []
-        for i in np.arange(len(patients)):
-            #patient_pixels_resampled, patient_spacing = resample(patients_img[i], patients_scans[i], [2,1,1])
-            patient_pixels_resampled, patient_spacing = resample_new(patients_img[i], patients_scans[i], [128,256,256])
+    #directory = os.path.join(args.output)
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+    else:
+        logger.debug("Pre-processed folder: {}  already exists!".format(args.output))
+
+    patients_pixels_resampled = []
+    patients_spacing = []
+    output = []
+    for i in np.arange(len(patients)):
+        patients_scans = load_scan(os.path.join(args.input,patients[i]))
+        patients_img = get_pixels_hu(patients_scans)
+        filename = "%s%s" %(patients[i],filetype)
+        newPath = os.path.join(args.output, filename)
+        if not os.path.exists(newPath):
+            #patient_pixels_resampled, patient_spacing = resample(patients_img, patients_scans, [2,1,1])
+            patient_pixels_resampled, patient_spacing = resample_new(patients_img, patients_scans, [128,256,256])
             patients_pixels_resampled.append(patient_pixels_resampled)
             patients_spacing.append(patient_spacing)
             patient_pixels_normalized = normalize(patient_pixels_resampled)
@@ -73,15 +83,22 @@ def main():
             img_y_size = patient_pixels_resampled.shape[2]
             output.append((patients[i],img_x_size, img_y_size, img_z_size, patient_spacing[1], patient_spacing[2], patient_spacing[0]))
 
-            print((output))
-            logger.debug("Shape before resampling\t{}".format(patients_img[i].shape))
+            #print((output))
+            logger.debug("Shape before resampling\t{}".format(patients_img.shape))
             logger.debug("Shape after resampling\t{}".format(patient_pixels_resampled.shape))
-            np.save(os.path.join(directory,"%s.npy" %(patients[i])), patient_pixels_zero_centered)
+            np.save(newPath, patient_pixels_zero_centered)
+            logger.debug("Save Pre-processed image: {} :)".format(newPath))
+        else:
+            logger.debug("Pre-processed image: {}  already exists!".format(newPath))
+
+    if len(output)>0:
         df_output = pd.DataFrame.from_records(output)
         df_output.columns = ['id', 'img_x_size', 'img_y_size', 'img_z_size','spacing_x', 'spacing_y', 'spacing_z']
-        df_output.to_csv('/workspace/dsbowl2017/data/preprocessing_img_info.csv',index=False)
+        df_output.to_csv(os.path.join(args.output,'preprocessing_img_info.csv'),index=False)
     else:
-        logger.debug("Pre-processed folder: {}  already exists!".format(directory))
+        logger.debug("Already preprocess all the images!!!!")
+
+
 
 if __name__ == "__main__":
     sys.exit(main())
