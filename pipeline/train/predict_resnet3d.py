@@ -58,7 +58,7 @@ predict_images = [os.path.basename(f) for f in glob.glob(os.path.join(image_path
 predict_gen = generate_predict_data_from_directory(predict_images, batch_size, image_path)
 
 
-logger.info("Start training...")
+logger.info("Start predicting...")
 prediction = model.predict_generator(predict_gen,
                                   steps = int(len(predict_images)/batch_size+0.5),
                                   max_q_size = 10,
@@ -68,7 +68,8 @@ prediction = model.predict_generator(predict_gen,
 
 logger.info("Finish Prediction! :)")
 output = pd.DataFrame.from_dict({'id': [j.replace('.npy','') for j in predict_images], "cancer": prediction[:,1]})
-output.to_csv(output_filepath,index = False, cols = ["id", "cancer"])
+output = output[["id","cancer"]]
+output.to_csv(output_filepath,index = False)
 s3_client.upload_file(output_filepath, s3bucket, os.path.basename(output_filepath))
 logger.debug("Successfully upload prediciotn csv file {} to S3! ".format(os.path.basename(output_filepath)))
 
