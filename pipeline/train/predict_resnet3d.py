@@ -10,7 +10,8 @@ from resnet3d import Resnet3DBuilder
 import sys
 import glob
 
-s3bucket = "dsbowl2017-stage1-images"
+s3bucket = "dsbowl2017-stage2-images"
+s3bucket_model = "dsbowl2017-stage1-images"
 input_sample_images = "sample_images"
 input_preprocessing_images = "preprocessing_images"
 input_csv = "csv"
@@ -51,9 +52,9 @@ def generate_predict_data_from_directory(images, batch_size, image_path=image_pa
 
 logger.info("Start loading model...")
 model_path = os.path.join(input_dir, sys.argv[1])
-s3_client.download_file(s3bucket, sys.argv[1], model_path)
+s3_client.download_file(s3bucket_model, sys.argv[1], model_path)
 model = load_model(model_path)
-predict_images = [os.basename(f) for f in glob.glob(os.path.join(image_path,'*.npy'))]
+predict_images = [os.path.basename(f) for f in glob.glob(os.path.join(image_path,'*.npy'))]
 predict_gen = generate_predict_data_from_directory(predict_images, batch_size, image_path)
 
 
@@ -67,8 +68,8 @@ prediction = model.predict_generator(predict_gen,
 
 logger.info("Finish Prediction! :)")
 output = pd.DataFrame.from_dict({'id': [j.replace('.npy','') for j in predict_images], "cancer": prediction[:,1]})
-output.to_csv(output_filepath,index = False)
-s3_client.upload_file(output_filepath, s3bucket, os.basename(output_filepath))
-logger.debug("Successfully upload prediciotn csv file {} to S3! ".format(os.basename(output_filepath)))
+output.to_csv(output_filepath,index = False, cols = ["id", "cancer"])
+s3_client.upload_file(output_filepath, s3bucket, os.path.basename(output_filepath))
+logger.debug("Successfully upload prediciotn csv file {} to S3! ".format(os.path.basename(output_filepath)))
 
 
